@@ -1,0 +1,72 @@
+#include <windows.h>
+#include <iostream>
+#include <cstdlib>
+#define MAX_THREADS 2
+using namespace std;
+// Global Variable
+int buffersize, counterlimit;
+int in = 0, out = 0;
+int TenSignIn = 0, TenSignOut = 0;
+int *buffer = new int[buffersize];
+CRITICAL_SECTION g_csThread;	//CRITICAL SECTION
+DWORD WINAPI producer(LPVOID), WINAPI consumer(LPVOID), id[MAX_THREADS], waiter;
+HANDLE hThreads[MAX_THREADS];
+
+DWORD WINAPI producer(LPVOID empty)
+{
+	int next_produced;
+	for (int i = 0; i <= counterlimit; i++) {
+		while (((in % buffersize) == out) && ((TenSignIn * buffersize + in) > (TenSignOut * buffersize + out + 9)))
+			; /*do nothing, Full*/
+		next_produced = rand();
+		EnterCriticalSection(&g_csThread);
+		std::cout << "Thread producer: " << next_produced << endl;
+		buffer[in] = next_produced;
+		if (in == buffersize) {
+			TenSignIn++;
+		}
+		in = (in + 1) % buffersize;
+		LeaveCriticalSection(&g_csThread);
+	}
+	EnterCriticalSection(&g_csThread);
+	std::cout << "...Thread producer terminating." << endl;
+	LeaveCriticalSection(&g_csThread);
+	return 0;
+}
+
+DWORD WINAPI consumer(LPVOID empty)
+{
+	int next_consumed;
+	for (int i = 0; i <= counterlimit; i++) {
+		while ((in == out) && (TenSignIn == TenSignOut))
+			; /*do nothing, Empty */
+		next_consumed = buffer[out];
+		EnterCriticalSection(&g_csThread);
+		std::cout << "Thread consumer: " << next_consumed << endl;
+		if (out == buffersize) {
+			TenSignOut++;
+		}
+		out = (out + 1) % buffersize;
+		LeaveCriticalSection(&g_csThread);
+	}
+	EnterCriticalSection(&g_csThread);
+	std::cout << "...Thread consumer terminating." << endl;
+	LeaveCriticalSection(&g_csThread);
+	return 0;
+}
+int main() {
+	InitializeCriticalSection(&g_csThread);	//Initialize Critical Section
+	std::cout << "Enter buffersize:";
+	std::cin >> buffersize;
+	std::cout << "Enter counterlimit:";
+	std::cin >> counterlimit;
+	hThreads[0] = CreateThread(NULL, 0, producer, NULL, NULL, &id[0]);
+	hThreads[1] = CreateThread(NULL, 0, consumer, NULL, NULL, &id[1]);
+	Sleep(500);
+	waiter = WaitForMultipleObjects(MAX_THREADS, hThreads, TRUE, INFINITE);
+	for (int i = 0; i < MAX_THREADS; i++) {
+		CloseHandle(hThreads[i]);
+	}
+	DeleteCriticalSection(&g_csThread);	//Delete Critical Section
+	return 0;
+}
